@@ -1,0 +1,554 @@
+ini main.dart
+import 'package:aisits_mobileApp/service/ship_provider.dart';
+import 'package:flutter/material.dart';
+import 'screen/login_screen.dart';
+import 'screen/splash_screen.dart';
+import 'screen/map_screen.dart';
+import 'screen/alert_screen.dart';
+import 'screen/danger_screen.dart';
+import 'package:provider/provider.dart';
+//import 'screen/weather_screen.dart';
+
+
+
+// pilih yang run
+void main() {
+    runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ShipProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
+
+
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Early Warning System',
+    theme: ThemeData(
+  primarySwatch: Colors.blue,
+  fontFamily: 'Roboto',
+  textTheme: TextTheme(
+    displayLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
+    bodyLarge: TextStyle(fontSize: 16, color: Colors.grey[700]),
+  ),
+),
+      initialRoute: '/splash', // Mulai dari splash screen
+      routes: {
+        '/splash': (context) => const SplashScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/map': (context) => const MapScreen(),
+        '/alert': (context) => AlertScreen(),
+        '/danger': (context) => DangerScreen(),
+      },
+    onUnknownRoute: (settings) {
+    return MaterialPageRoute(
+      builder: (context) => Scaffold(
+        appBar: AppBar(title: const Text("Page Not Found")),
+        body: const Center(child: Text("The page you are looking for does not exist.")),
+      ),
+    );
+  },
+);
+}
+}
+
+ini adalah map scren
+import 'package:aisits_mobileApp/model/ship_model.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../service/ship_provider.dart';
+import '../service/ship_service.dart';
+import '../widget/polygon_widget.dart';
+import '../widget/custom_drawer.dart';
+
+class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
+
+  @override
+  _MapScreenState createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> with AutomaticKeepAliveClientMixin {
+  late final ShipService _shipService;
+  late final MapController _mapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+    _shipService = ShipService(
+      url: 'ws://146.190.89.97:6767',
+      token: 'labramsjosgandoss',
+      onMarkerTap: _showShipDetails,
+    );
+
+    // Load data kapal dari JSON
+    _shipService.loadShipData();
+
+    // Mendengarkan data kapal dari WebSocket
+    _shipService.listenToShipDataStream((ShipData data) {
+      final shipProvider = Provider.of<ShipProvider>(context, listen: false);
+      shipProvider.addShip(data);
+    });
+  }
+
+  @override
+  void dispose() {
+    _shipService.close();
+    super.dispose();
+  }
+
+void _showShipDetails(ShipData shipData) {
+  if (!mounted) return;
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Hero(
+        tag: "ship_${shipData.id}", // Gunakan MMSI sebagai tag unik
+        child: AlertDialog(
+          title: const Text("Detail Kapal"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Nama Kapal: ${shipData.name}"),
+              Text("Tipe Kapal: ${shipData.type}"),
+              Text("Latitude: ${shipData.latitude.toStringAsFixed(6)}"),
+              Text("Longitude: ${shipData.longitude.toStringAsFixed(6)}"),
+              Text("Kecepatan: ${shipData.speed.toStringAsFixed(2)} knots"),
+              Text("Status Mesin: ${shipData.engineStatus}"),
+              Text("Waktu Terima: ${shipData.receivedOn.toString()}"),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text("Tutup"),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final shipProvider = Provider.of<ShipProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Map"),
+        actions: [
+          Builder(
+            builder: (BuildContext context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () {
+                Scaffold.of(context).openEndDrawer();
+              },
+            ),
+          ),
+        ],
+      ),
+      endDrawer: const CustomDrawer(),
+      body: FlutterMap(
+        mapController: _mapController,
+        options: const MapOptions(
+          initialCenter: LatLng(-7.257472, 112.752088),
+          minZoom: 8.0,
+          maxZoom: 14.0,
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+          ),
+          PolygonLayer(polygons: getPolygons()),
+          MarkerLayer(
+            markers: shipProvider.markers.values.toList(), // Tampilkan semua marker tanpa clustering
+          ),
+        ],
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: "zoomInButton",
+            onPressed: () {
+              // ignore: deprecated_member_use
+              _mapController.move(_mapController.center, _mapController.zoom + 1);
+            },
+            child: const Icon(Icons.zoom_in),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: "zoomOutButton",
+            onPressed: () {
+              // ignore: deprecated_member_use
+              _mapController.move(_mapController.center, _mapController.zoom - 1);
+            },
+            child: const Icon(Icons.zoom_out),
+          ),
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}
+
+dan ini adalah folder service 
+1.ship parsed 
+
+import 'package:flutter/foundation.dart';
+import '../model/ship_model.dart';
+
+Future<ShipData> parseShipData(Map json) async {
+  return compute(_parseShipData, json);
+}
+
+ShipData _parseShipData(Map json) {
+  try {
+    final message = json['message'];
+    if (message == null) {
+      throw Exception('Invalid JSON structure: Missing "message"');
+    }
+    final data = message['data'];
+    if (data == null || data['valid'] == false) {
+      throw Exception('Invalid ship data: ${data['error']}');
+    }
+    return ShipData.fromJson(data);
+  } catch (e) {
+    print('Error parsing ship data: $e');
+    rethrow;
+  }
+}
+
+2.ship provider 
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../model/ship_model.dart';
+
+class ShipProvider with ChangeNotifier {
+  // Data kapal
+  final Map<String, ShipData> _ships = {};
+  Map<String, ShipData> get ships => _ships;
+
+  // Marker kapal
+  final Map<String, Marker> _markers = {};
+  Map<String, Marker> get markers => _markers;
+
+  // Menambahkan kapal
+  void addShip(ShipData ship) {
+  if (ship.latitude == 0.0 || ship.longitude == 0.0) {
+    print("Invalid coordinates for ship: ${ship.id}");
+    return;
+  }
+    updateMarkers(ship);
+    notifyListeners();
+  }
+
+  // Memperbarui data kapal
+  void updateShip(String id, Map<String, dynamic> newData) {
+    if (_ships.containsKey(id)) {
+      _ships[id]!.updateFromJson(newData);
+      updateMarkers(_ships[id]!);
+      notifyListeners();
+    }
+  }
+
+  // Menghapus kapal
+  void removeShip(String id) {
+    if (_ships.containsKey(id)) {
+      _ships.remove(id);
+      _markers.remove(id);
+      notifyListeners();
+    }
+  }
+
+  // Memperbarui marker kapal
+  void updateMarkers(ShipData shipData) {
+    final mmsi = shipData.id.toString();
+    final latLng = LatLng(shipData.latitude, shipData.longitude);
+
+    _markers[mmsi] = Marker(
+      point: latLng,
+      child: GestureDetector(
+        onTap: () {
+          print("Marker tapped: MMSI=$mmsi, Name=${shipData.name}");
+        },
+        child: shipData.getIcon(),
+      ),
+    );
+  }
+}
+
+3.ship service 
+import 'package:aisits_mobileApp/model/ship_model.dart';
+import 'package:aisits_mobileApp/service/json_service.dart';
+import 'package:aisits_mobileApp/service/notification_service.dart';
+import 'package:aisits_mobileApp/service/ship_parsed.dart';
+import 'package:aisits_mobileApp/service/websocket_service.dart';
+import 'package:aisits_mobileApp/widget/polygon_widget.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
+typedef OnMarkerTap = void Function(ShipData shipData);
+
+class ShipService {
+  final WebSocketService _webSocketService;
+  final JsonService _jsonService = JsonService();
+  final NotificationService _notificationService = NotificationService();
+
+  // Data kapal
+  final Map<String, ShipData> ships = {};
+  final ValueNotifier<Map<String, Marker>> markersNotifier = ValueNotifier({});
+
+  // Callback untuk menangani klik marker
+  final OnMarkerTap? onMarkerTap;
+
+  ShipService({
+    required String url,
+    required String token,
+    this.onMarkerTap,
+  }) : _webSocketService = WebSocketService(url, token) {
+    _connectWebSocket(url, token);
+    loadShipData(); // Load data kapal dari JSON saat inisialisasi
+  }
+
+  // Connect ke WebSocket
+  void _connectWebSocket(String url, String token) {
+    _webSocketService.shipDataStream.listen((data) async {
+      print("WebSocket data received: $data");
+      try {
+        if (data is! Map) {
+          throw Exception('Invalid data format from WebSocket');
+        }
+        final ShipData shipData = await parseShipData(data as Map);
+        print("Parsed ship data: $shipData");
+        syncShipDataWithJson(shipData);
+        updateMarkers(shipData);
+        checkShipLocation(shipData, getPolygons());
+      } catch (e) {
+        print('Error parsing ship data: $e');
+      }
+    });
+  }
+
+  // Load data kapal dari JSON
+  Future<void> loadShipData() async {
+    try {
+      final List shipList = await _jsonService.loadShipData();
+      print("Loaded ship data from JSON: ${shipList.length} ships");
+
+      for (var shipJson in shipList) {
+        final String shipId = shipJson['MMSI'].toString();
+
+        if (shipId == "0") continue;
+
+        if (ships.containsKey(shipId)) {
+          ships[shipId]!.updateFromJson(shipJson);
+        } else {
+          final ShipData ship = ShipData(
+            id: shipId,
+            latitude: 0.0,
+            longitude: 0.0,
+            speed: 0.0,
+            engineStatus: 'Unknown',
+            name: shipJson['NAME'] ?? 'Unknown',
+            type: shipJson['TYPENAME'] ?? 'Unknown',
+            navStatus: 'Unknown',
+            trueHeading: 0.0,
+            cog: 0.0,
+            receivedOn: DateTime.now(),
+          );
+          ships[shipId] = ship;
+        }
+      }
+    } catch (e) {
+      print('Error loading ship data: $e');
+    }
+  }
+
+  // Sinkronisasi data kapal dengan JSON
+  void syncShipDataWithJson(ShipData shipData) {
+    final String mmsi = shipData.id.toString();
+    if (ships.containsKey(mmsi)) {
+      final ShipData jsonShip = ships[mmsi]!;
+      shipData.updateFromJson(jsonShip.toJson());
+      shipData.name = jsonShip.name;
+      shipData.type = jsonShip.type;
+      print(
+          "Synced ship data with JSON: MMSI=$mmsi, Name=${shipData.name}, Type=${shipData.type}");
+    } else {
+      print("No matching ship data found in JSON for MMSI=$mmsi");
+    }
+  }
+
+  // Memperbarui marker kapal
+  void updateMarkers(ShipData shipData) {
+    if (shipData.latitude == 0.0 || shipData.longitude == 0.0) {
+      print("Invalid coordinates for ship: MMSI=${shipData.id}");
+      return;
+    }
+
+    final String mmsi = shipData.id.toString();
+    final LatLng latLng = LatLng(shipData.latitude, shipData.longitude);
+
+    markersNotifier.value = {
+      ...markersNotifier.value,
+      mmsi: Marker(
+        point: latLng,
+        child: GestureDetector(
+          onTap: () {
+            print("Marker tapped: MMSI=${shipData.id}");
+            if (onMarkerTap != null) {
+              onMarkerTap!(
+                  shipData); // Panggil callback untuk menampilkan detail kapal
+            }
+          },
+          child: Hero(
+            tag: "ship_${shipData.id}",
+            child: shipData.getIcon(),
+          ),
+        ),
+      ),
+    };
+  }
+
+  // Memeriksa lokasi kapal
+  void checkShipLocation(ShipData shipData, List<Polygon> polygons) {
+    if (polygons.isEmpty) return;
+
+    final LatLng latLng = LatLng(shipData.latitude, shipData.longitude);
+
+    for (Polygon polygon in polygons) {
+      if (isPointInPolygon(latLng, polygon.points)) {
+        if (polygon.color == Colors.red) {
+          _notificationService.addDangerMessage(
+              "Kapal ${shipData.name} memasuki AREA TERLARANG!");
+          print(
+              "Added danger message: Kapal ${shipData.name} memasuki AREA TERLARANG!");
+        } else if (polygon.color == Colors.blue) {
+          _notificationService.addAlertMessage(
+              "Kapal ${shipData.name} memasuki AREA TERBATAS!");
+        }
+        return;
+      }
+    }
+  }
+
+  // Fungsi utilitas untuk memeriksa apakah titik berada di dalam poligon
+  bool isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    if (polygon.isEmpty) return false;
+
+    int n = polygon.length;
+    bool inside = false;
+
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+      final double xi = polygon[i].latitude;
+      final double yi = polygon[i].longitude;
+      final double xj = polygon[j].latitude;
+      final double yj = polygon[j].longitude;
+
+      final bool intersect =
+          ((yi > point.longitude) != (yj > point.longitude)) &&
+              (point.latitude <
+                  (xj - xi) * (point.longitude - yi) / (yj - yi) + xi);
+
+      if (intersect) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  // Menutup WebSocket
+  void close() {
+    _webSocketService.close();
+  }
+
+  // Listener untuk data kapal
+  void listenToShipDataStream(void Function(ShipData data) onData) {
+    _webSocketService.shipDataStream.listen(onData);
+  }
+}
+
+
+import 'package:flutter/material.dart';
+import '../screen/map_screen.dart';
+import '../service/notification_service.dart';
+
+class DangerScreen extends StatelessWidget {
+  final NotificationService _notificationService = NotificationService();
+
+  DangerScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Daftar Kapal di Area Terlarang"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // Judul
+            const Text(
+              "Daftar Kapal yang Masuk ke Area Terlarang",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Divider(color: Colors.red, thickness: 2),
+            const SizedBox(height: 10),
+            // Isi
+            Expanded(
+              child: _notificationService.dangerMessages.isEmpty
+                  ? const Center(child: Text("Tidak ada notifikasi."))
+                  : ListView.builder(
+                      itemCount: _notificationService.dangerMessages.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        return ListTile(
+                          leading: const Icon(Icons.dangerous, color: Colors.red),
+                          title:
+                              Text(_notificationService.dangerMessages[index]),
+                        );
+                      },
+                    ),
+            ),
+            // Tombol Tutup
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    // ignore: always_specify_types
+                    MaterialPageRoute(builder: (BuildContext context) => const MapScreen()),
+                  );
+                },
+                child: const Text("Tutup"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

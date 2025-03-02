@@ -1,0 +1,2 @@
+C:/Magang/aisits/android/app/.cxx/RelWithDebInfo/4b34y4e5/x86/CMakeFiles/edit_cache.dir
+C:/Magang/aisits/android/app/.cxx/RelWithDebInfo/4b34y4e5/x86/CMakeFiles/rebuild_cache.dir

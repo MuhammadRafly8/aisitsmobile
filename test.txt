@@ -1,0 +1,2307 @@
+model 
+1.ship
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/svg.dart';
+
+class ShipData {
+  String id;
+  double latitude;
+  double longitude;
+  double speed;
+  String? engineStatus; // Nullable
+  String? name; // Nullable
+  String? type; // Nullable
+  String? navStatus; // Nullable
+  double trueHeading;
+  double cog;
+  DateTime receivedOn;
+
+  ShipData({
+    required this.id,
+    required this.latitude,
+    required this.longitude,
+    required this.speed,
+    this.engineStatus, // Nullable
+    this.name, // Nullable
+    this.type, // Nullable
+    this.navStatus, // Nullable
+    required this.trueHeading,
+    required this.cog,
+    required this.receivedOn,
+  });
+
+  // Fungsi untuk mendapatkan ikon SVG berdasarkan tipe kapal
+  Widget getIcon() {
+    switch (type?.toLowerCase()) { // Handle nullable `type`
+      case 'cargo':
+        return SvgPicture.asset('assets/icons/cargo.svg', width: 40, height: 40);
+      case 'cruise':
+        return SvgPicture.asset('assets/icons/cruise.svg', width: 40, height: 40);
+      case 'special':
+        return SvgPicture.asset('assets/icons/special.svg', width: 40, height: 40);
+      case 'support':
+        return SvgPicture.asset('assets/icons/support.svg', width: 40, height: 40);
+      case 'tanker':
+        return SvgPicture.asset('assets/icons/tanker.svg', width: 40, height: 40);
+      default:
+        return SvgPicture.asset('assets/icons/unknown.svg', width: 40, height: 40);
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'latitude': latitude,
+      'longitude': longitude,
+      'speed': speed,
+      'engineStatus': engineStatus,
+      'name': name,
+      'type': type,
+      'navStatus': navStatus,
+      'trueHeading': trueHeading,
+      'cog': cog,
+      'receivedOn': receivedOn.toIso8601String(),
+    };
+  }
+
+  // Parsing data dari JSON
+  factory ShipData.fromJson(Map json) {
+    try {
+      final message = json['message'];
+      if (message == null) {
+        throw Exception('Invalid JSON structure: Missing "message"');
+      }
+      final data = message['data'];
+      if (data == null || data['valid'] == false) {
+        throw Exception('Invalid ship data: ${data['error']}');
+      }
+      return ShipData(
+        id: data['mmsi'].toString(),
+        latitude: (data['lat'] as num?)?.toDouble() ?? 0.0,
+        longitude: (data['lon'] as num?)?.toDouble() ?? 0.0,
+        speed: (data['sog'] as num?)?.toDouble() ?? 0.0,
+        engineStatus: data['smi'] == 0 ? 'ON' : 'OFF',
+        name: data['NAME'], // Nullable
+        type: data['TYPENAME'], // Nullable
+        navStatus: data['navstatus']?.toString(), // Nullable
+        trueHeading: (data['hdg'] as num?)?.toDouble() ?? 0.0,
+        cog: (data['cog'] as num?)?.toDouble() ?? 0.0,
+        receivedOn: DateTime.tryParse(json['timestamp']) ?? DateTime.now(),
+      );
+    } catch (e) {
+      print('Error parsing ship data: $e');
+      rethrow;
+    }
+  }
+
+  void updateFromJson(Map shipJson) {
+    print("Updating ship data from JSON: $shipJson");
+
+    latitude = (shipJson['lat'] as num?)?.toDouble() ?? latitude;
+    longitude = (shipJson['lon'] as num?)?.toDouble() ?? longitude;
+    speed = (shipJson['sog'] as num?)?.toDouble() ?? speed;
+    engineStatus = shipJson['smi'] == 0 ? 'ON' : 'OFF';
+    name = shipJson['NAME'] ?? name; // Nullable
+    type = shipJson['TYPENAME'] ?? type; // Nullable
+    navStatus = shipJson['navstatus']?.toString() ?? navStatus; // Nullable
+    trueHeading = (shipJson['hdg'] as num?)?.toDouble() ?? trueHeading;
+    cog = (shipJson['cog'] as num?)?.toDouble() ?? cog;
+    receivedOn = DateTime.tryParse(shipJson['timestamp']) ?? receivedOn;
+
+    print("Updated ship data: Name=$name, Type=$type");
+  }
+}
+
+screen 
+1.alert 
+import 'package:aisits_mobileApp/screen/map_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../service/notification_service.dart';
+
+class AlertScreen extends StatelessWidget {
+  const AlertScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final notificationService = Provider.of<NotificationService>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Daftar Kapal di Area Terbatas"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Daftar Kapal yang Masuk ke Area Terbatas",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Divider(color: Colors.blue, thickness: 2),
+            const SizedBox(height: 10),
+            Expanded(
+              child: notificationService.alertMessages.isEmpty
+                  ? const Center(child: Text("Tidak ada notifikasi."))
+                  : ListView.builder(
+                      itemCount: notificationService.alertMessages.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        return ListTile(
+                          leading: const Icon(Icons.warning, color: Colors.blue),
+                          title: Text(notificationService.alertMessages[index].replaceAll("Kapal Unknown", "Kapal Tidak Diketahui")),
+                        );
+                      },
+                    ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const MapScreen()),
+                  );
+                },
+                child: const Text("Tutup"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+2.danger
+import 'package:aisits_mobileApp/screen/map_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../service/notification_service.dart';
+
+class DangerScreen extends StatelessWidget {
+  const DangerScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final notificationService = Provider.of<NotificationService>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Daftar Kapal di Area Terlarang"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Daftar Kapal yang Masuk ke Area Terlarang",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Divider(color: Colors.red, thickness: 2),
+            const SizedBox(height: 10),
+            Expanded(
+              child: notificationService.dangerMessages.isEmpty
+                  ? const Center(child: Text("Tidak ada notifikasi."))
+                  : ListView.builder(
+                      itemCount: notificationService.dangerMessages.length,
+                      itemBuilder: (BuildContext context, int index) {
+                        return ListTile(
+                          leading: const Icon(Icons.dangerous, color: Colors.red),
+                          title: Text(notificationService.dangerMessages[index].replaceAll("Kapal Unknown", "Kapal Tidak Diketahui")),
+                        );
+                      },
+                    ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const MapScreen()),
+                  );
+                },
+                child: const Text("Tutup"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+3.login
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MyApp1());
+}
+
+class MyApp1 extends StatelessWidget {
+  const MyApp1({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      home: LoginScreen(),
+    );
+  }
+}
+
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  _LoginScreenState createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  // Data login yang valid
+  final String validUsername = "user@rams.co.id";
+  final String validPassword = "userRams200!!";
+
+  void _login() {
+    String email = _emailController.text;
+    String password = _passwordController.text;
+
+    if (email == validUsername && password == validPassword) {
+      // Jika login berhasil, pindah ke HomeScreen
+      Navigator.pushReplacementNamed(context, '/map');
+    } else {
+      // Jika login gagal, tampilkan pesan error
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Invalid username or password!"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+  @override
+  Widget build(BuildContext context) {
+    final double screenWidth = MediaQuery.of(context).size.width;
+
+    return Scaffold(
+      backgroundColor: const Color(0xffe6e6e6),
+      body: Stack(
+        children: <Widget>[
+          Container(
+            width: screenWidth,
+            height: MediaQuery.of(context).size.height * 0.35,
+            decoration: const BoxDecoration(
+              color: Color(0xff3a57e8),
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.fromLTRB(40, 100, 40, 20), // Padding kanan-kiri lebih dalam
+            decoration: BoxDecoration(
+              color: const Color(0xffffffff),
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20), // Padding lebih rapi
+              child: SingleChildScrollView(
+                child: Column(
+                  children: <Widget>[
+                    // Logo dengan ukuran yang sama dan responsif
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Expanded(
+                          child: Image.asset(
+                            "assets/logo pertamina 1.png",
+                            fit: BoxFit.contain,
+                            height: 80,
+                          ),
+                        ),
+                        const SizedBox(width: 20), // Jarak seimbang antara logo
+                        Expanded(
+                          child: Image.asset(
+                            "assets/aislogo.png",
+                            fit: BoxFit.contain,
+                            height: 80,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+
+                    // Teks Login di tengah
+                    const Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        "Login",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 22,
+                          color: Color(0xff000000),
+                        ),
+                      ),
+                    ),
+
+                    // Input Email dengan padding lebih dalam
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: TextField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20), // Padding lebih dalam
+                          hintText: "Enter Email",
+                          hintStyle: const TextStyle(fontSize: 14, color: Color(0xff494646)),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Color(0xff000000), width: 1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: const BorderSide(color: Color(0xff000000), width: 1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Input Password dengan padding lebih dalam
+                    TextField(
+                       controller: _passwordController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20), // Padding lebih dalam
+                        hintText: "Enter Password",
+                        hintStyle: const TextStyle(fontSize: 14, color: Color(0xff494646)),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(color: Color(0xff000000), width: 1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(color: Color(0xff000000), width: 1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+
+                    // Lupa Password
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16, bottom: 30),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          "Forgot Password?",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: Color(0xff3a57e8),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Tombol Login
+                    MaterialButton(
+                      onPressed: _login,
+                      color: const Color(0xff3a57e8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16.0),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      textColor: const Color(0xffffffff),
+                      child: const Text(
+                        "Login",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+
+                    // Daftar Akun
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Text(
+                            "Don't have an account?",
+                            style: TextStyle(fontSize: 14, color: Color(0xff000000)),
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            "SignUp",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: Color(0xff000000),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+4.map
+import 'package:aisits_mobileApp/model/ship_model.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../service/ship_provider.dart';
+import '../service/ship_service.dart';
+import '../widget/polygon_widget.dart';
+import '../widget/custom_drawer.dart';
+
+class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
+
+  @override
+  _MapScreenState createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> with AutomaticKeepAliveClientMixin {
+  late final ShipService _shipService;
+  late final MapController _mapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+    _shipService = ShipService(
+      url: 'ws://146.190.89.97:6767',
+      token: 'labramsjosgandoss',
+      onMarkerTap: _showShipDetails,
+    );
+
+    // Load data kapal dari JSON
+    _shipService.loadShipData();
+
+    // Mendengarkan data kapal dari WebSocket
+    _shipService.listenToShipDataStream((ShipData data) {
+      final shipProvider = Provider.of<ShipProvider>(context, listen: false);
+      shipProvider.addShip(data);
+    });
+  }
+
+  @override
+  void dispose() {
+    _shipService.close();
+    super.dispose();
+  }
+
+ void _showShipDetails(ShipData shipData) {
+  if (!mounted) {
+    print("Widget is not mounted. Skipping showDialog.");
+    return;
+  }
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text("Detail Kapal"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Nama Kapal: ${shipData.name ?? 'unknown'}"),
+            Text("Tipe Kapal: ${shipData.type ?? 'unknown'}"),
+            Text("Latitude: ${shipData.latitude.toStringAsFixed(6)}"),
+            Text("Longitude: ${shipData.longitude.toStringAsFixed(6)}"),
+            Text("Kecepatan: ${shipData.speed.toStringAsFixed(2)} knots"),
+            Text("Status Mesin: ${shipData.engineStatus ?? 'unknown'}"),
+            Text("Waktu Terima: ${shipData.receivedOn.toString()}"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text("Tutup"),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    Provider.of<ShipProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Map"),
+        actions: [
+          Builder(
+            builder: (BuildContext context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () {
+                Scaffold.of(context).openEndDrawer();
+              },
+            ),
+          ),
+        ],
+      ),
+      endDrawer: const CustomDrawer(),
+      body: FlutterMap(
+  mapController: _mapController,
+  options: const MapOptions(
+    initialCenter: LatLng(-7.257472, 112.752088),
+    minZoom: 8.0,
+    maxZoom: 14.0,
+  ),
+  children: [
+    TileLayer(
+      urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    ),
+    PolygonLayer(polygons: getPolygons()),
+    ValueListenableBuilder<Map<String, Marker>>(
+      valueListenable: _shipService.markersNotifier,
+      builder: (context, markers, _) {
+        return MarkerLayer(markers: markers.values.toList());
+      },
+    ),
+  ],
+),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: "zoomInButton",
+            onPressed: () {
+              _mapController.move(_mapController.center, _mapController.zoom + 1);
+            },
+            child: const Icon(Icons.zoom_in),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: "zoomOutButton",
+            onPressed: () {
+              _mapController.move(_mapController.center, _mapController.zoom - 1);
+            },
+            child: const Icon(Icons.zoom_out),
+          ),
+        ],
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}
+
+5.splash
+import 'package:flutter/material.dart';
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  _SplashScreenState createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi animasi fade-in
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    // Mulai animasi
+    _controller.forward();
+    // Tambahkan delay untuk navigasi ke halaman utama
+    Future.delayed(const Duration(seconds: 3), () {
+      Navigator.pushReplacementNamed(context, '/login'); // Pindah ke halaman map
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _animation,
+          child: ScaleTransition(
+            scale: _animation,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 200,
+                  height: 200,
+                  child: Image.asset(
+                    "assets/aislogo.png", // Pastikan path ini benar
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+6.weather 
+setelah problem terselesaikan screen weather akan di FloatingActionButtonLocation
+
+service
+1.json 
+import 'dart:convert';
+import 'package:flutter/services.dart';
+
+class JsonService {
+  Future<List<dynamic>> loadShipData() async {
+    try {
+      final jsonString = await rootBundle.loadString('assets/ship.json');
+      final jsonData = json.decode(jsonString);
+      if (jsonData is! List) {
+        throw Exception('Invalid JSON structure: Expected a list of ships');
+      }
+      return jsonData;
+    } catch (e) {
+      print('Error loading ship data: $e');
+      rethrow;
+    }
+  }
+}
+
+2.notification 
+import 'package:flutter/material.dart';
+
+class NotificationService with ChangeNotifier {
+  final List<String> _alertMessages = [];
+  final List<String> _dangerMessages = [];
+
+  List<String> get alertMessages => _alertMessages;
+  List<String> get dangerMessages => _dangerMessages;
+
+  void addAlertMessage(String message) {
+    _alertMessages.add(message.replaceAll("Unknown", "Tidak Diketahui"));
+    notifyListeners(); // Perbarui UI
+    print("Added alert message: $message");
+  }
+
+  void addDangerMessage(String message) {
+    _dangerMessages.add(message.replaceAll("Unknown", "Tidak Diketahui"));
+    notifyListeners(); // Perbarui UI
+    print("Added danger message: $message");
+  }
+
+  void clearMessages() {
+    _alertMessages.clear();
+    _dangerMessages.clear();
+    notifyListeners(); // Perbarui UI
+  }
+}
+
+3.ship parsed
+import 'package:flutter/foundation.dart';
+import '../model/ship_model.dart';
+
+Future<ShipData> parseShipData(Map json) async {
+  return compute(_parseShipData, json);
+}
+
+ShipData _parseShipData(Map json) {
+  try {
+    final message = json['message'];
+    if (message == null) {
+      throw Exception('Invalid JSON structure: Missing "message"');
+    }
+    final data = message['data'];
+    if (data == null || data['valid'] == false) {
+      throw Exception('Invalid ship data: ${data['error']}');
+    }
+    return ShipData.fromJson(data);
+  } catch (e) {
+    print('Error parsing ship data: $e');
+    rethrow;
+  }
+}
+
+4.ship provider
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import '../model/ship_model.dart';
+
+class ShipProvider with ChangeNotifier {
+  final Map<String, ShipData> _ships = {};
+  final Map<String, Marker> _markers = {};
+
+  Map<String, ShipData> get ships => _ships;
+  Map<String, Marker> get markers => _markers;
+
+  void addShip(ShipData ship) {
+    if (ship.latitude == 0.0 || ship.longitude == 0.0) {
+      print("Invalid coordinates for ship: ${ship.id}");
+      return;
+    }
+    _ships[ship.id] = ship;
+    updateMarkers(ship);
+    notifyListeners();
+  }
+
+  void updateMarkers(ShipData shipData) {
+    final String mmsi = shipData.id.toString();
+    final LatLng latLng = LatLng(shipData.latitude, shipData.longitude);
+
+    _markers[mmsi] = Marker(
+      point: latLng,
+      child: GestureDetector(
+        onTap: () {
+          print("Marker tapped: MMSI=$mmsi, Name=${shipData.name}");
+        },
+        child: shipData.getIcon(),
+      ),
+    );
+    notifyListeners();
+  }
+}
+
+5.ship service
+import 'package:aisits_mobileApp/model/ship_model.dart';
+import 'package:aisits_mobileApp/service/json_service.dart';
+import 'package:aisits_mobileApp/service/notification_service.dart';
+import 'package:aisits_mobileApp/service/ship_parsed.dart';
+import 'package:aisits_mobileApp/service/websocket_service.dart';
+import 'package:aisits_mobileApp/widget/polygon_widget.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
+typedef OnMarkerTap = void Function(ShipData shipData);
+
+class ShipService {
+  final WebSocketService _webSocketService;
+  final JsonService _jsonService = JsonService();
+  final NotificationService _notificationService = NotificationService();
+
+  // Data kapal
+  final Map<String, ShipData> ships = {};
+  final ValueNotifier<Map<String, Marker>> markersNotifier = ValueNotifier({});
+
+  // Callback untuk menangani klik marker
+  final OnMarkerTap? onMarkerTap;
+
+  ShipService({
+    required String url,
+    required String token,
+    this.onMarkerTap,
+  }) : _webSocketService = WebSocketService(url, token) {
+    _connectWebSocket(url, token);
+    loadShipData(); // Load data kapal dari JSON saat inisialisasi
+  }
+
+  // Connect ke WebSocket
+  void _connectWebSocket(String url, String token) {
+    _webSocketService.shipDataStream.listen((data) async {
+      print("WebSocket data received: $data");
+      try {
+        if (data is! Map) {
+          throw Exception('Invalid data format from WebSocket');
+        }
+        final ShipData shipData = await parseShipData(data as Map);
+        print("Parsed ship data: $shipData");
+        syncShipDataWithJson(shipData);
+        updateMarkers(shipData);
+        checkShipLocation(shipData, getPolygons());
+      } catch (e) {
+        print('Error parsing ship data: $e');
+      }
+    });
+  }
+
+  // Load data kapal dari JSON
+  Future<void> loadShipData() async {
+    try {
+      final List shipList = await _jsonService.loadShipData();
+      print("Loaded ship data from JSON: ${shipList.length} ships");
+
+      for (var shipJson in shipList) {
+        final String shipId = shipJson['MMSI'].toString();
+
+        if (shipId == "0") continue;
+
+        if (ships.containsKey(shipId)) {
+          ships[shipId]!.updateFromJson(shipJson);
+        } else {
+          final ShipData ship = ShipData(
+            id: shipId,
+            latitude: 0.0,
+            longitude: 0.0,
+            speed: 0.0,
+            engineStatus: 'Unknown',
+            name: shipJson['NAME'] ?? 'Unknown',
+            type: shipJson['TYPENAME'] ?? 'Unknown',
+            navStatus: 'Unknown',
+            trueHeading: 0.0,
+            cog: 0.0,
+            receivedOn: DateTime.now(),
+          );
+          ships[shipId] = ship;
+        }
+      }
+    } catch (e) {
+      print('Error loading ship data: $e');
+    }
+  }
+
+  // Sinkronisasi data kapal dengan JSON
+  void syncShipDataWithJson(ShipData shipData) {
+    final String mmsi = shipData.id.toString();
+    if (ships.containsKey(mmsi)) {
+      final ShipData jsonShip = ships[mmsi]!;
+      shipData.updateFromJson(jsonShip.toJson());
+      shipData.name = jsonShip.name ?? 'unknown';
+      shipData.type = jsonShip.type ?? 'unknown';
+      print(
+          "Synced ship data with JSON: MMSI=$mmsi, Name=${shipData.name}, Type=${shipData.type}");
+    } else {
+      print("No matching ship data found in JSON for MMSI=$mmsi");
+      // Gunakan nilai default jika tidak ada data JSON
+      shipData.name = shipData.name ?? 'unknown';
+      shipData.type = shipData.type ?? 'unknown';
+    }
+  }
+
+  // Memperbarui marker kapal
+  void updateMarkers(ShipData shipData) {
+  if (shipData.latitude == 0.0 || shipData.longitude == 0.0) {
+    print("Invalid coordinates for ship: MMSI=${shipData.id}");
+    return;
+  }
+
+  final String mmsi = shipData.id.toString();
+  final LatLng latLng = LatLng(shipData.latitude, shipData.longitude);
+
+  markersNotifier.value = {
+    ...markersNotifier.value,
+    mmsi: Marker(
+      point: latLng,
+      child: GestureDetector(
+        onTap: () {
+          print("Marker tapped: MMSI=${shipData.id}");
+          if (onMarkerTap != null) {
+            print("Calling onMarkerTap for MMSI=${shipData.id}");
+            onMarkerTap!(shipData); // Panggil callback untuk menampilkan detail kapal
+          } else {
+            print("onMarkerTap is null");
+          }
+        },
+        child: Hero(
+          tag: "ship_${shipData.id}",
+          child: shipData.getIcon(),
+        ),
+      ),
+    ),
+  };
+}
+  // Memeriksa lokasi kapal
+  void checkShipLocation(ShipData shipData, List<Polygon> polygons) {
+    if (polygons.isEmpty) return;
+
+    final LatLng latLng = LatLng(shipData.latitude, shipData.longitude);
+
+    for (Polygon polygon in polygons) {
+      if (isPointInPolygon(latLng, polygon.points)) {
+        if (polygon.color == Colors.red) {
+          _notificationService.addDangerMessage(
+              "Kapal ${shipData.name} memasuki AREA TERLARANG!");
+          print(
+              "Added danger message: Kapal ${shipData.name} memasuki AREA TERLARANG!");
+        } else if (polygon.color == Colors.blue) {
+          _notificationService.addAlertMessage(
+              "Kapal ${shipData.name} memasuki AREA TERBATAS!");
+        }
+        return;
+      }
+    }
+  }
+
+  // Fungsi utilitas untuk memeriksa apakah titik berada di dalam poligon
+  bool isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    if (polygon.isEmpty) return false;
+
+    int n = polygon.length;
+    bool inside = false;
+
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+      final double xi = polygon[i].latitude;
+      final double yi = polygon[i].longitude;
+      final double xj = polygon[j].latitude;
+      final double yj = polygon[j].longitude;
+
+      final bool intersect =
+          ((yi > point.longitude) != (yj > point.longitude)) &&
+              (point.latitude <
+                  (xj - xi) * (point.longitude - yi) / (yj - yi) + xi);
+
+      if (intersect) inside = !inside;
+    }
+
+    return inside;
+  }
+
+  // Menutup WebSocket
+  void close() {
+    _webSocketService.close();
+  }
+
+  // Listener untuk data kapal
+  void listenToShipDataStream(void Function(ShipData data) onData) {
+    _webSocketService.shipDataStream.listen(onData);
+  }
+}
+
+6.websocket service
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../model/ship_model.dart';
+import '../service/notification_service.dart';
+
+// Debouncer class untuk menunda eksekusi fungsi
+class Debouncer {
+  final Duration delay;
+  Timer? _timer;
+
+  Debouncer(this.delay);
+
+  void run(VoidCallback action) {
+    _timer?.cancel();
+    _timer = Timer(delay, action);
+  }
+
+  void dispose() {
+    _timer?.cancel();
+  }
+}
+
+class WebSocketService {
+  static final WebSocketService _instance = WebSocketService._internal();
+  factory WebSocketService(String url, String token) {
+    if (!_instance._isInitialized) {
+      _instance._connect(url, token);
+    }
+    return _instance;
+  }
+
+  WebSocketService._internal();
+
+  late final IO.Socket _socket;
+  final StreamController<ShipData> _streamController = StreamController<ShipData>.broadcast();
+  bool _isInitialized = false;
+  int _reconnectAttempts = 0;
+  final Debouncer _debouncer = Debouncer(Duration(milliseconds: 200));
+
+  void _connect(String url, String token) {
+    _socket = IO.io(url, {
+      'transports': ['websocket'],
+      'autoConnect': false,
+      'auth': {'token': token},
+    });
+
+    _socket.connect();
+
+    _socket.onConnect((_) {
+      print("WebSocket connected at ${DateTime.now()}");
+      _reconnectAttempts = 0; // Reset attempts on successful connection
+    });
+
+    _socket.onDisconnect((_) {
+      print("WebSocket disconnected");
+      _reconnect();
+    });
+
+    _socket.onConnectError((error) {
+      print("WebSocket connection error: $error");
+      _reconnect();
+    });
+
+    _socket.onError((error) {
+      print("WebSocket error: $error");
+      _reconnect();
+    });
+
+    _socket.on('messageFromServer', (data) {
+      _debouncer.run(() {
+        print("Raw data received: $data");
+        try {
+          final shipData = ShipData.fromJson(data);
+          print("Parsed ship data: $shipData");
+          _streamController.add(shipData);
+        } catch (e) {
+          print('Error parsing ship data: $e');
+        }
+      });
+    });
+
+    _isInitialized = true;
+  }
+
+  void _reconnect() {
+    if (_reconnectAttempts < 5) {
+      _reconnectAttempts++;
+      final delay = Duration(seconds: _reconnectAttempts * 2);
+      print("Reconnecting in ${delay.inSeconds} seconds...");
+      Future.delayed(delay, () {
+        _socket.connect();
+      });
+    } else {
+      print("Max reconnection attempts reached.");
+      NotificationService().addDangerMessage("Gagal terhubung ke server. Silakan coba lagi nanti.");
+    }
+  }
+
+  Stream<ShipData> get shipDataStream => _streamController.stream;
+
+  void updateToken(String newToken) {
+    _socket.disconnect();
+    _socket.io.options?['auth'] = {'token': newToken};
+    _socket.connect();
+    print("Updated WebSocket token to: $newToken");
+  }
+
+  void close() {
+    _socket.disconnect();
+    _streamController.close();
+    _debouncer.dispose();
+    print("WebSocket and StreamController closed.");
+  }
+}
+
+widget
+
+1.custom drawer
+import 'package:flutter/material.dart';
+import '../widget/drawer_menu.dart';
+
+class CustomDrawer extends StatelessWidget {
+  const CustomDrawer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const DrawerMenu(); // Gunakan widget DrawerMenu langsung
+  }
+}
+
+2.drawer menu
+import 'package:flutter/material.dart';
+
+
+class DrawerMenu extends StatelessWidget {
+  const DrawerMenu({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: Container(
+        color: Colors.blue[900],
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Colors.blue),
+              child: Text(
+                'Menu',
+                style: TextStyle(color: Colors.white, fontSize: 24),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.home, color: Colors.white),
+              title: const Text('Home', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.location_on, color: Colors.white),
+              title: const Text('Markship', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/map');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.warning, color: Colors.white),
+              title: const Text('Alert', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/alert');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dangerous, color: Colors.white),
+              title: const Text('Danger', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/danger');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud, color: Colors.white),
+              title: const Text('Weather', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/weather');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.white),
+              title: const Text('Logout', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pushReplacementNamed(context, '/logout');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+3.polygon widget
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
+List<Polygon> getPolygons() {
+  return [
+    // Polygon ke 1
+                Polygon(
+                  points: [
+                    const LatLng(-6.828415, 112.982696),
+                    const LatLng(-6.877396, 112.982696),
+                    const LatLng(-6.877526, 112.931058),
+                    const LatLng(-6.828415, 112.931058),
+                    const LatLng(-6.828415, 112.982696),
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                // Polygon ke 2
+                Polygon(
+                  points: [
+                    const LatLng(-6.412635, 112.916869),
+                    const LatLng(-6.444161, 112.919647),
+                    const LatLng(-6.444192, 112.911409),
+                    const LatLng(-6.455784, 112.9137),
+                    const LatLng(-6.455732, 112.927599),
+                    const LatLng(-6.487478, 112.927599),
+                    const LatLng(-6.487478, 112.900571),
+                    const LatLng(-6.488425, 112.898826),
+                    const LatLng(-6.489918, 112.894022),
+                    const LatLng(-6.492847, 112.876109),
+                    const LatLng(-6.50522, 112.876109),
+                    const LatLng(-6.50522, 112.894403),
+                    const LatLng(-6.536795, 112.894403),
+                    const LatLng(-6.536839, 112.882658),
+                    const LatLng(-6.536878, 112.872351),
+                    const LatLng(-6.536913, 112.862655),
+                    const LatLng(-6.50784, 112.862655),
+                    const LatLng(-6.500419, 112.860917),
+                    const LatLng(-6.500419, 112.84431),
+                    const LatLng(-6.468415, 112.84431),
+                    const LatLng(-6.468415, 112.875992),
+                    const LatLng(-6.483692, 112.875992),
+                    const LatLng(-6.481075, 112.892091),
+                    const LatLng(-6.479647, 112.896053),
+                    const LatLng(-6.455851, 112.895964),
+                    const LatLng(-6.455819, 112.904494),
+                    const LatLng(-6.444227, 112.902203),
+                    const LatLng(-6.444279, 112.888014),
+                    const LatLng(-6.412635, 112.888014),
+                    const LatLng(-6.412635, 112.916869),
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+          Polygon(
+                  points: [
+                    const LatLng(-6.536839,112.882658), //13
+                    const LatLng(-6.625594,112.914924), //14
+                    const LatLng(-6.642428, 112.907465) ,//144
+                    const LatLng(-6.567989, 112.882739) , //145
+                    const LatLng(-6.55938, 112.879866) , //81
+                    const LatLng(-6.536878,112.872351), //82
+                    const LatLng(-6.536839,112.882658), //13
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.625594,112.914924),//14
+                    const LatLng(-6.607979,112.914856),
+                    const LatLng(-6.607979,112.946501),
+                    const LatLng(-6.639499,112.946501),
+                    const LatLng(-6.645262,112.951293),
+                    const LatLng(-6.676905,112.951293),
+                    const LatLng(-6.676905,112.936018),
+                    const LatLng(-6.678438,112.926019), //26
+                    const LatLng(-6.701719,112.911401), //27
+                    const LatLng(-6.721404,112.911401), //28
+                    const LatLng(-6.721494,112.888267), //29
+                    const LatLng(-6.713304,112.882671), //116
+                    const LatLng(-6.713304,112.869402),
+                    const LatLng(-6.681659,112.869402), //118
+                    const LatLng(-6.681659,112.894337),
+                    const LatLng(-6.670141,112.894337),
+                    const LatLng(-6.670108,112.90281),
+                    const LatLng(-6.664518,112.902788), //122
+                    const LatLng(-6.655219, 112.902753), //142
+                    const LatLng(-6.642446, 112.902703), // 143
+                    const LatLng(-6.642428, 112.907465), // 144
+                    const LatLng(-6.625594,112.914924),//14
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.826906,113.040529),
+                    const LatLng(-6.826906,113.061993),
+                    const LatLng(-6.85859,113.061993),
+                    const LatLng(-6.85859,113.030341),
+                    const LatLng(-6.828114,113.030341),
+                    const LatLng(-6.826906,113.040529),
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.676905,112.936018), //20
+                    const LatLng(-6.826906,113.040529), //21
+                    const LatLng(-6.828114, 113.030341),
+                    const LatLng(-6.678438,112.926019), //26
+                    const LatLng(-6.676905,112.936018), //20
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.721494,112.888267), //29
+                    const LatLng(-6.867736,112.801153),//part 6
+                    const LatLng(-6.874153,112.793874),
+                    const LatLng(-6.885337,112.776754),
+                    const LatLng(-6.915723,112.7371),
+                    const LatLng(-6.921693,112.73204),
+                    const LatLng(-6.932077,112.728345),
+                    const LatLng(-6.949531,112.726349),
+                    const LatLng(-6.980208,112.71351),
+                    const LatLng(-6.999522,112.698295),
+                    const LatLng(-7.006999,112.690313),
+                    const LatLng(-7.011753,112.687268),
+                    const LatLng(-7.044181,112.673664),
+                    const LatLng(-7.059346,112.670243),
+                    const LatLng(-7.071968,112.670263), //43
+                    const LatLng(-7.092007,112.667616),
+                    const LatLng(-7.10881,112.670841),
+                    const LatLng(-7.121279,112.679911),
+                    const LatLng(-7.128217,112.681537),
+                    const LatLng(-7.140631,112.681277),
+                    const LatLng(-7.147863,112.679012),
+                    const LatLng(-7.155881,112.679269), 
+                    const LatLng(-7.173373,112.669881),
+                    const LatLng(-7.16801,112.662592), // 52 
+                    const LatLng(-7.16151,112.667385),//97
+                    const LatLng(-7.139145,112.672478),//98  
+                    const LatLng(-7.129072,112.672492),
+                    const LatLng(-7.125015,112.671562),
+                    const LatLng(-7.112481,112.662443),
+                    const LatLng(-7.092189,112.658507),
+                    const LatLng(-7.071383,112.661221),
+                    const LatLng(-7.067351,112.66122),
+                    const LatLng(-7.034241,112.667055),
+                    const LatLng(-7.015417,112.675933),
+                    const LatLng(-6.993393,112.691624),
+                    const LatLng(-6.975586,112.705691),
+                    const LatLng(-6.947251,112.717545),
+                    const LatLng(-6.940674,112.718291),
+                    const LatLng(-6.911774,112.728659),
+                    const LatLng(-6.909069,112.730938),
+                    const LatLng(-6.877956,112.771523),
+                    const LatLng(-6.866937,112.788404),
+                    const LatLng(-6.861911,112.794159),
+                    const LatLng(-6.713304,112.882671), //116
+                    const LatLng(-6.721494,112.888267), //29
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+
+                // Polygon kedua
+                Polygon(
+                  points: [
+                    const LatLng(-7.16801, 112.662592), //part 6.5
+                    const LatLng(-7.131421, 112.648949),
+                    const LatLng(-7.106253, 112.64744),
+                    const LatLng(-7.086429, 112.646869),
+                    const LatLng(-7.039473, 112.655268),
+                    const LatLng(-7.012645, 112.663982),
+                    const LatLng(-6.887931, 112.714591),
+                    const LatLng(-6.876458, 112.714879),
+                    const LatLng(-6.837363, 112.715086),
+                    const LatLng(-6.76502, 112.715295),
+                    const LatLng(-6.760491, 112.715777),
+                    const LatLng(-6.755682, 112.717644),
+                    const LatLng(-6.750766, 112.721094),
+                    const LatLng(-6.661401, 112.80822),     
+                    const LatLng(-6.666542, 112.815833),     
+                    const LatLng(-6.756611, 112.728013),    
+                    const LatLng(-6.759986, 112.725636),    
+                    const LatLng(-6.762547, 112.724629),    
+                    const LatLng(-6.765417, 112.724337),     
+                    const LatLng(-6.837395, 112.724132),     
+                    const LatLng(-6.837406, 112.724132),     
+                    const LatLng(-6.87655, 112.723927),     
+                    const LatLng(-6.889789, 112.723521),    
+                    const LatLng(-7.015744, 112.672487),
+                    const LatLng(-7.033741, 112.665508),   
+                    const LatLng(-7.041674, 112.664058),     
+                    const LatLng(-7.087095, 112.65592),     
+                    const LatLng(-7.133585, 112.658148),    
+                    const LatLng(-7.14675, 112.662503),
+                    const LatLng(-7.16151,112.667385),    
+                    const LatLng(-7.16801, 112.662592),
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                Polygon(
+                  points: [
+                   const LatLng(-6.661401,112.80822), // part 7
+                    const LatLng(-6.644327,112.808157),// 66
+                    const LatLng(-6.608956,112.756866),
+                    const LatLng(-6.608956,112.726),
+                    const LatLng(-6.574517,112.726),
+                    const LatLng(-6.574517,112.764775),
+                    const LatLng(-6.603427,112.764775),
+                    const LatLng(-6.626139,112.797711),
+                    const LatLng(-6.607776,112.797644),
+                    const LatLng(-6.569115,112.807314),
+                    const LatLng(-6.542615,112.814755),
+                    const LatLng(-6.542615,112.846397),
+                    const LatLng(-6.555991,112.846447),
+                    const LatLng(-6.559076,112.862333),
+                    const LatLng(-6.560042,112.867584),
+                    const LatLng(-6.560286,112.873725),//80
+                    const LatLng(-6.55938,112.879866), //81  
+                    const LatLng(-6.567989, 112.882739) , //145  
+                    const LatLng(-6.569085,112.876862),
+                    const LatLng(-6.569375,112.871655),
+                    const LatLng(-6.569049,112.866734),
+                    const LatLng(-6.567953,112.860616),
+                    const LatLng(-6.565208,112.846481),
+                    const LatLng(-6.626459,112.831455), //151
+                    const LatLng(-6.626459,112.875547),//140
+                    const LatLng(-6.653259,112.875649),
+                    const LatLng(-6.655219,112.902753),
+                    const LatLng(-6.664518,112.902788), //122
+                    const LatLng(-6.660094,112.840824),
+                    const LatLng(-6.666449,112.840848),
+                    const LatLng(-6.666542,112.815833), //125
+                    const LatLng(-6.661401,112.80822), //65
+                  ],
+                  color: Colors.blue,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.blue,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.653704,112.923557), //area terlarang 1
+                    const LatLng(-6.665721,112.923557),
+                    const LatLng(-6.665721,112.914049),
+                    const LatLng(-6.653704,112.914049),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.69044,112.905684), //area terlarang 2
+                    const LatLng(-6.681364,112.905684),
+                    const LatLng(-6.681364,112.914762),
+                    const LatLng(-6.69044,112.914762),
+                                      ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.701959,112.880748), //area terlarang 3
+                      const LatLng(-6.710181,112.880748),
+                      const LatLng(-6.710181,112.889826),
+                      const LatLng(-6.701959,112.889826),
+                      const LatLng(-6.692883,112.880748),
+                      const LatLng(-6.692883,112.889826),
+                      const LatLng(-6.701959,112.889826),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.710181,112.891051), //area terlarang 4
+                      const LatLng(-6.701105,112.891051),
+                      const LatLng(-6.701105,112.900129),
+                      const LatLng(-6.710181,112.900129),
+                      const LatLng(-6.701105,112.891051),
+                      const LatLng(-6.701105,112.900129),
+                      const LatLng(-6.710181,112.900129),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.839671,112.951455), //area terlarang 5
+                      const LatLng(-6.839671,112.960184),
+                      const LatLng(-6.847851,112.951455),
+                      const LatLng(-6.847851,112.960184),
+                      const LatLng(-6.853617,112.960184),
+                      const LatLng(-6.853617,112.969002),
+                      const LatLng(-6.857111,112.969017),
+                      const LatLng(-6.857101,112.971473),
+                      const LatLng(-6.866179,112.971473),
+                      const LatLng(-6.866179,112.962413),
+                      const LatLng(-6.860767,112.962413),
+                      const LatLng(-6.860767,112.952383),
+                      const LatLng(-6.864447,112.952398),
+                      const LatLng(-6.864447,112.943231),
+                      const LatLng(-6.853645,112.943231),
+                      const LatLng(-6.853645,112.949198),
+                      const LatLng(-6.848712,112.949198),
+                      const LatLng(-6.848712,112.94241),
+                      const LatLng(-6.839671,112.94241),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.847242,113.041691), //area terlarang 6
+                    const LatLng(-6.847242,113.050774),
+                    const LatLng(-6.856319,113.050774),
+                    const LatLng(-6.856319,113.041691),
+                    const LatLng(-6.838163,113.041691),
+                    const LatLng(-6.838163,113.050774),
+                    const LatLng(-6.847242,113.050774),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.619201,112.926202), //area terlarang 7
+                    const LatLng(-6.619201,112.935278),
+                    const LatLng(-6.628277,112.935278),
+                    const LatLng(-6.628277,112.926202),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.637687,112.855245), //area terlarang 8
+                      const LatLng(-6.637687,112.864321),
+                      const LatLng(-6.646762,112.864321),
+                      const LatLng(-6.646762,112.855245),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.655223,112.829502), //area terlarang 9
+                      const LatLng(-6.655223,112.819467),
+                      const LatLng(-6.646031,112.819467),
+                      const LatLng(-6.646031,112.829502),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.628079,112.808988), //area terlarang 10
+                      const LatLng(-6.619004,112.808988),
+                      const LatLng(-6.619004,112.818063),
+                      const LatLng(-6.628079,112.818063),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                      const LatLng(-6.603411,112.8104), //area terlarang 11
+                      const LatLng(-6.603411,112.819475),
+                      const LatLng(-6.612485,112.819475),
+                      const LatLng(-6.612485,112.8104),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.589418,112.818656), //area terlarang 13
+                    const LatLng(-6.580343,112.818656),
+                    const LatLng(-6.580343,112.827731),
+                    const LatLng(-6.589418,112.827731),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.553876,112.82613), //area terlarang 14
+                    const LatLng(-6.553876,112.835138),
+                    const LatLng(-6.562884,112.835138),
+                    const LatLng(-6.562884,112.82613),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.52557,112.873987), //area terlarang 15
+                    const LatLng(-6.516495,112.873987),
+                    const LatLng(-6.516495,112.88306),
+                    const LatLng(-6.52557,112.88306),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.489076,112.864768), //area terlarang 16
+                    const LatLng(-6.489076,112.85565),
+                    const LatLng(-6.479642,112.85565),
+                    const LatLng(-6.479642,112.864768),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.476151,112.907305), //area terlarang 17
+                    const LatLng(-6.46711	,112.907305),
+                    const LatLng(-6.46711,112.916378),
+                    const LatLng(-6.476151,112.916378),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.423861,112.899354), //area terlarang 18
+                    const LatLng(-6.423861,112.908425),
+                    const LatLng(-6.432936,112.908425),
+                    const LatLng(-6.432936,112.899354),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+                Polygon(
+                  points: [
+                    const LatLng(-6.656607,112.930993), //area terlarang 19
+                    const LatLng(-6.656607,112.94007),
+                    const LatLng(-6.665683,112.940070),
+                    const LatLng(-6.665683,112.930993),
+                    const LatLng(-6.656607,112.94007),
+                    const LatLng(-6.665683,112.940070),
+                    const LatLng(-6.665683,112.930993),
+                  ],
+                  color: Colors.red,
+                  borderStrokeWidth: 3.0,
+                  borderColor: Colors.red,
+                ),
+  ];
+}
+
+asset
+1.icon
+2.ship.json beberapa contoh
+[{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb77"
+  },
+  "IMO": "9048964",
+  "MMSI": "0",
+  "NAME": "PRINIAS",
+  "BUILT": "1994",
+  "FLAG": "CY",
+  "FLAGNAME": "Cyprus",
+  "TYPE": "B32A",
+  "TYPENAME": "Tug",
+  "GT": "338",
+  "DWT": "222",
+  "LOA": "32",
+  "BEAM": "0",
+  "DRAUGHT": "0",
+  "CLASSCODE": "UNKNOWN"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb78"
+  },
+  "IMO": "9107734",
+  "MMSI": "0",
+  "NAME": "TRI BAHAGIA",
+  "BUILT": "1994",
+  "FLAG": "ID",
+  "FLAGNAME": "Indonesia",
+  "TYPE": "B32A",
+  "TYPENAME": "Tug",
+  "GT": "114",
+  "DWT": "112",
+  "LOA": "23.17",
+  "BEAM": "7",
+  "DRAUGHT": "2.39",
+  "CLASS": "NIPPON KAIJI KYOKAI",
+  "CLASSCODE": "NK"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb79"
+  },
+  "IMO": "9063897",
+  "MMSI": "0",
+  "NAME": "PIZ AMALIA",
+  "BUILT": "1993",
+  "FLAG": "ZZ",
+  "FLAGNAME": "Unknown",
+  "TYPE": "W11",
+  "TYPENAME": "Inland Tanker",
+  "GT": "2400",
+  "DWT": "4500",
+  "LOA": "85.75",
+  "BEAM": "11.4",
+  "DRAUGHT": "3.2",
+  "CLASSCODE": "UNKNOWN"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb7a"
+  },
+  "IMO": "9017628",
+  "MMSI": "373172000",
+  "CALLSIGN": "3EZY9",
+  "NAME": "ARMONIA",
+  "BUILT": "1992",
+  "FLAG": "PA",
+  "FLAGNAME": "Panama",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "5988",
+  "DWT": "9743",
+  "LOA": "113.12",
+  "BEAM": "18.9",
+  "DRAUGHT": "8.54",
+  "CLASS": "REGISTRO ITALIANO NAVALE",
+  "CLASSCODE": "RINA"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb7b"
+  },
+  "IMO": "8816728",
+  "MMSI": "0",
+  "NAME": "ABLA",
+  "BUILT": "1989",
+  "FLAG": "MA",
+  "FLAGNAME": "Morocco",
+  "TYPE": "B11B",
+  "TYPENAME": "Fishing Vessel",
+  "GT": "393",
+  "DWT": "300",
+  "LOA": "37.17",
+  "BEAM": "8.52",
+  "DRAUGHT": "3.85",
+  "CLASSCODE": "UNKNOWN"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb7c"
+  },
+  "IMO": "8840066",
+  "MMSI": "0",
+  "NAME": "HAE YANG 2",
+  "BUILT": "1989",
+  "FLAG": "KR",
+  "FLAGNAME": "Korea",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "1340",
+  "DWT": "1199",
+  "LOA": "61.82",
+  "BEAM": "13.2",
+  "DRAUGHT": "4.95",
+  "CLASS": "KOREAN REGISTER OF SHIPPING",
+  "CLASSCODE": "KR"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb7d"
+  },
+  "IMO": "9063160",
+  "MMSI": "0",
+  "NAME": "JIANG HAI TONG",
+  "BUILT": "1993",
+  "FLAG": "CN",
+  "FLAGNAME": "China",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "1546",
+  "DWT": "2232",
+  "LOA": "83.1",
+  "BEAM": "12.8",
+  "DRAUGHT": "4.5",
+  "CLASS": "CHINA CLASSIFICATION SOCIETY",
+  "CLASSCODE": "CCS"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb7e"
+  },
+  "IMO": "8718885",
+  "MMSI": "273390940",
+  "CALLSIGN": "UBXP8",
+  "NAME": "NORD WEST",
+  "BUILT": "1989",
+  "FLAG": "RU",
+  "FLAGNAME": "Russia",
+  "TYPE": "B11B",
+  "TYPENAME": "Fishing Vessel",
+  "GT": "1167",
+  "DWT": "481",
+  "LOA": "50.6",
+  "BEAM": "12",
+  "DRAUGHT": "5.26",
+  "CLASS": "LLOYD'S REGISTER",
+  "CLASSCODE": "LR"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb7f"
+  },
+  "IMO": "9037991",
+  "MMSI": "422064200",
+  "CALLSIGN": "EPDB5",
+  "NAME": "SOHEYL 12",
+  "BUILT": "1992",
+  "FLAG": "IR",
+  "FLAGNAME": "Iran",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "269",
+  "DWT": "740",
+  "LOA": "61",
+  "BEAM": "9.8",
+  "DRAUGHT": "4.2",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb80"
+  },
+  "IMO": "8804579",
+  "MMSI": "311042400",
+  "CALLSIGN": "C6YQ9",
+  "NAME": "GREEN MALOY",
+  "BUILT": "1990",
+  "FLAG": "BS",
+  "FLAGNAME": "Bahamas",
+  "TYPE": "A34A",
+  "TYPENAME": "Refrigerated Cargo Ship",
+  "GT": "5084",
+  "DWT": "6120",
+  "LOA": "109",
+  "BEAM": "18.02",
+  "DRAUGHT": "7.41",
+  "CLASS": "DNV GL",
+  "CLASSCODE": "DNVGL"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb81"
+  },
+  "IMO": "9020704",
+  "MMSI": "431392000",
+  "CALLSIGN": "JNZS",
+  "NAME": "OCEAN PHENIX",
+  "BUILT": "1992",
+  "FLAG": "JP",
+  "FLAGNAME": "Japan",
+  "TYPE": "A11B",
+  "TYPENAME": "LPG Tanker",
+  "GT": "2948",
+  "DWT": "2858",
+  "LOA": "96",
+  "BEAM": "15",
+  "DRAUGHT": "5.62",
+  "CLASSCODE": "UNKNOWN"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb82"
+  },
+  "IMO": "9034781",
+  "MMSI": "0",
+  "NAME": "KARADENIZ POWERSHIP NEZIH BEY",
+  "BUILT": "1992",
+  "FLAG": "LR",
+  "FLAGNAME": "Liberia",
+  "TYPE": "B35F",
+  "TYPENAME": "Power Station Vessel",
+  "GT": "6380",
+  "DWT": "2588",
+  "LOA": "82.4",
+  "BEAM": "18.85",
+  "DRAUGHT": "6.25",
+  "CLASS": "BUREAU VERITAS",
+  "CLASSCODE": "BV"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb83"
+  },
+  "IMO": "8865078",
+  "MMSI": "0",
+  "NAME": "ATAGO MARU NO. 6",
+  "BUILT": "1992",
+  "FLAG": "JP",
+  "FLAGNAME": "Japan",
+  "TYPE": "A13B",
+  "TYPENAME": "Oil Products Tanker",
+  "GT": "186",
+  "DWT": "350",
+  "LOA": "0",
+  "BEAM": "0",
+  "DRAUGHT": "2.7",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb84"
+  },
+  "IMO": "9078440",
+  "MMSI": "0",
+  "NAME": "MATSUO MARU NO. 12",
+  "BUILT": "1994",
+  "FLAG": "JP",
+  "FLAGNAME": "Japan",
+  "TYPE": "A13B",
+  "TYPENAME": "Oil Products Tanker",
+  "GT": "198",
+  "DWT": "540",
+  "LOA": "0",
+  "BEAM": "0",
+  "DRAUGHT": "3.25",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb85"
+  },
+  "IMO": "8918382",
+  "MMSI": "272142000",
+  "CALLSIGN": "URWK",
+  "NAME": "VILKOVO",
+  "BUILT": "1993",
+  "FLAG": "UA",
+  "FLAGNAME": "Ukraine",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "2977",
+  "DWT": "4050",
+  "LOA": "88.45",
+  "BEAM": "15.52",
+  "DRAUGHT": "5.67",
+  "CLASS": "RUSSIAN MARITIME REGISTER OF SHIPPING",
+  "CLASSCODE": "RS"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb86"
+  },
+  "IMO": "9076777",
+  "MMSI": "0",
+  "NAME": "SCHS 1064",
+  "BUILT": "1993",
+  "FLAG": "RU",
+  "FLAGNAME": "Russia",
+  "TYPE": "B11A",
+  "TYPENAME": "Trawler",
+  "GT": "104",
+  "DWT": "58",
+  "LOA": "26.5",
+  "BEAM": "6.59",
+  "DRAUGHT": "2.36",
+  "CLASSCODE": "UNKNOWN"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb87"
+  },
+  "IMO": "8875102",
+  "MMSI": "0",
+  "NAME": "HYRONDEX",
+  "BUILT": "1993",
+  "FLAG": "ID",
+  "FLAGNAME": "Indonesia",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "2453",
+  "DWT": "3200",
+  "LOA": "81.16",
+  "BEAM": "15",
+  "DRAUGHT": "5.2",
+  "CLASS": "BIRO KLASIFIKASI INDONESIA",
+  "CLASSCODE": "BKI"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb88"
+  },
+  "IMO": "8923997",
+  "MMSI": "0",
+  "NAME": "EFFECTIVE",
+  "BUILT": "1993",
+  "FLAG": "US",
+  "FLAGNAME": "United States of America",
+  "TYPE": "B31A",
+  "TYPENAME": "Research Vessel",
+  "GT": "3347",
+  "DWT": "2655",
+  "LOA": "71.48",
+  "BEAM": "24.38",
+  "DRAUGHT": "7.9",
+  "CLASS": "AMERICAN BUREAU OF SHIPPING",
+  "CLASSCODE": "ABS"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb89"
+  },
+  "IMO": "9003134",
+  "MMSI": "0",
+  "NAME": "DELPHINUS",
+  "BUILT": "1991",
+  "FLAG": "PA",
+  "FLAGNAME": "Panama",
+  "TYPE": "A35B",
+  "TYPENAME": "Vehicles Carrier",
+  "GT": "17752",
+  "DWT": "10761",
+  "LOA": "163.45",
+  "BEAM": "25",
+  "DRAUGHT": "8.22",
+  "CLASS": "NIPPON KAIJI KYOKAI",
+  "CLASSCODE": "NK"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb8a"
+  },
+  "IMO": "9048512",
+  "MMSI": "567055400",
+  "CALLSIGN": "HSB4273",
+  "NAME": "BIG SEA 15",
+  "BUILT": "1992",
+  "FLAG": "TH",
+  "FLAGNAME": "Thailand",
+  "TYPE": "A13B",
+  "TYPENAME": "Oil Products Tanker",
+  "GT": "1065",
+  "DWT": "1897",
+  "LOA": "74.84",
+  "BEAM": "11.22",
+  "DRAUGHT": "4.78",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb8b"
+  },
+  "IMO": "9039925",
+  "MMSI": "224062340",
+  "CALLSIGN": "EAGH",
+  "NAME": "JOAQUIN TORRES",
+  "BUILT": "1992",
+  "FLAG": "ES",
+  "FLAGNAME": "Spain",
+  "TYPE": "B32A",
+  "TYPENAME": "Tug",
+  "GT": "263",
+  "DWT": "179",
+  "LOA": "28.85",
+  "BEAM": "8.7",
+  "DRAUGHT": "4.29",
+  "CLASS": "BUREAU VERITAS",
+  "CLASSCODE": "BV"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb8c"
+  },
+  "IMO": "9010917",
+  "MMSI": "257898000",
+  "CALLSIGN": "LAPT7",
+  "NAME": "CRUDE PASSION",
+  "BUILT": "1992",
+  "FLAG": "NO",
+  "FLAGNAME": "Norway",
+  "TYPE": "A12B",
+  "TYPENAME": "Chemical/Oil Products Tanker",
+  "GT": "5045",
+  "DWT": "8000",
+  "LOA": "124.86",
+  "BEAM": "17.22",
+  "DRAUGHT": "7.11",
+  "CLASS": "REGISTRO ITALIANO NAVALE",
+  "CLASSCODE": "RINA"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb8d"
+  },
+  "IMO": "9040247",
+  "MMSI": "533110239",
+  "CALLSIGN": "9MTV8",
+  "NAME": "LANGKAWI FERRY 888",
+  "BUILT": "1991",
+  "FLAG": "MY",
+  "FLAGNAME": "Malaysia",
+  "TYPE": "A37B",
+  "TYPENAME": "Passenger Ship",
+  "GT": "476",
+  "DWT": "39",
+  "LOA": "40",
+  "BEAM": "10.1",
+  "DRAUGHT": "1.64",
+  "CLASS": "CHINA CLASSIFICATION SOCIETY",
+  "CLASSCODE": "CCS"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb8e"
+  },
+  "IMO": "9012795",
+  "MMSI": "620452000",
+  "CALLSIGN": "D6A2452",
+  "NAME": "VIRILE",
+  "BUILT": "1992",
+  "FLAG": "KM",
+  "FLAGNAME": "Comoros",
+  "TYPE": "A33A",
+  "TYPENAME": "Container Ship",
+  "GT": "7361",
+  "DWT": "9203",
+  "LOA": "128.53",
+  "BEAM": "20.2",
+  "DRAUGHT": "8.31",
+  "CLASS": "VENEZUELAN REGISTER OF SHIPPING",
+  "CLASSCODE": "VRS"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb8f"
+  },
+  "IMO": "9060209",
+  "MMSI": "0",
+  "NAME": "JIN NIU LING",
+  "BUILT": "1992",
+  "FLAG": "CN",
+  "FLAGNAME": "China",
+  "TYPE": "A21A",
+  "TYPENAME": "Bulk Carrier",
+  "GT": "16712",
+  "DWT": "28470",
+  "LOA": "169.03",
+  "BEAM": "27.24",
+  "DRAUGHT": "9.75",
+  "CLASS": "CHINA CLASSIFICATION SOCIETY",
+  "CLASSCODE": "CCS"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb90"
+  },
+  "IMO": "8914776",
+  "MMSI": "271043873",
+  "CALLSIGN": "TCA3179",
+  "NAME": "PARSA",
+  "BUILT": "1991",
+  "FLAG": "TR",
+  "FLAGNAME": "Turkey",
+  "TYPE": "A12A",
+  "TYPENAME": "Chemical Tanker",
+  "GT": "4988",
+  "DWT": "8224",
+  "LOA": "115.2",
+  "BEAM": "18",
+  "DRAUGHT": "7.72",
+  "CLASS": "NIPPON KAIJI KYOKAI",
+  "CLASSCODE": "NK"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb91"
+  },
+  "IMO": "9020950",
+  "MMSI": "0",
+  "NAME": "GITTE",
+  "BUILT": "1992",
+  "FLAG": "MT",
+  "FLAGNAME": "Malta",
+  "TYPE": "A33A",
+  "TYPENAME": "Container Ship",
+  "GT": "9151",
+  "DWT": "9868",
+  "LOA": "133.67",
+  "BEAM": "22.98",
+  "DRAUGHT": "8.55",
+  "CLASS": "LLOYD'S REGISTER",
+  "CLASSCODE": "LR"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb92"
+  },
+  "IMO": "9062520",
+  "MMSI": "667001611",
+  "CALLSIGN": "9LU2414",
+  "NAME": "WAN XIANG",
+  "BUILT": "1992",
+  "FLAG": "SL",
+  "FLAGNAME": "Sierra Leone",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "199",
+  "DWT": "651",
+  "LOA": "0",
+  "BEAM": "9.3",
+  "DRAUGHT": "3.28",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb93"
+  },
+  "IMO": "9050668",
+  "MMSI": "0",
+  "NAME": "GLOBAL",
+  "BUILT": "1994",
+  "FLAG": "PW",
+  "FLAGNAME": "Palau",
+  "TYPE": "A21A",
+  "TYPENAME": "Bulk Carrier",
+  "GT": "38479",
+  "DWT": "73350",
+  "LOA": "225",
+  "BEAM": "32.26",
+  "DRAUGHT": "13.87",
+  "CLASS": "NIPPON KAIJI KYOKAI",
+  "CLASSCODE": "NK"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb94"
+  },
+  "IMO": "9021320",
+  "MMSI": "0",
+  "NAME": "SOHO MARU NO. 17",
+  "BUILT": "1991",
+  "FLAG": "JP",
+  "FLAGNAME": "Japan",
+  "TYPE": "B11B",
+  "TYPENAME": "Fishing Vessel",
+  "GT": "340",
+  "DWT": "0",
+  "LOA": "62.82",
+  "BEAM": "9.02",
+  "DRAUGHT": "3.95",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
+{
+  "_id": {
+    "$oid": "61cd5aa62a070153aefbeb95"
+  },
+  "IMO": "9042910",
+  "MMSI": "0",
+  "NAME": "AZUMA MARU NO. 8",
+  "BUILT": "1992",
+  "FLAG": "JP",
+  "FLAGNAME": "Japan",
+  "TYPE": "A31A",
+  "TYPENAME": "General Cargo Ship",
+  "GT": "198",
+  "DWT": "620",
+  "LOA": "0",
+  "BEAM": "9.3",
+  "DRAUGHT": "3.35",
+  "CLASS": "OTHER",
+  "CLASSCODE": "OTHER"
+},
